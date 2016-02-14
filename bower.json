@@ -1,0 +1,15 @@
+{
+  "name": "msa-edition",
+  "version": "0.1.0",
+  "homepage": "https://github.com/mysimpleapp/msa-edition",
+  "authors": [
+    "Nicolas CARREZ <nicolas.carrez@gmail.com>"
+  ],
+  "description": "Web component (compatible with My Simple App applications) allowing to easily create web pages.",
+  "main": "server/index.js",
+  "license": "MIT",
+  "dependencies": {
+    "mysimpleapp": "*",
+    "picoModal": "*"
+  }
+}

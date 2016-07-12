@@ -1,0 +1,242 @@
+<link rel="import" href="../mysimpleapp/mysimpleapp.pack.html"></link>
+<link rel="import" href="msa-edition.html"></link>
+<script>
+var ResizingHolder = null
+var holderMouseMoveListener = function(evt){
+	if(ResizingHolder) return
+	var resizer = this.resizer, dirs = resizer.dirs
+	// compute position
+	var mouseX = evt.layerX, mouseY = evt.layerY
+	var borderLeft = dirs.left && (mouseX<10)
+	var borderRight = dirs.right && (this.offsetWidth-mouseX<10)
+	var borderTop = dirs.top && (mouseY<10)
+	var borderBottom = dirs.bottom && (this.offsetHeight-mouseY<10)
+	// determine action
+	resizer.resizeWidth = (borderRight ? 1 : (borderLeft ? -1 : 0))
+	resizer.resizeHeight = (borderBottom ? 1 : (borderTop ? -1 : 0))
+	// determine cursor
+	var cursor = ""
+	if(resizer.resizeHeight==1) cursor += "s"
+	if(resizer.resizeHeight==-1) cursor += "n"
+	if(resizer.resizeWidth==1) cursor += "e"
+	if(resizer.resizeWidth==-1) cursor += "w"
+	if(cursor!="") cursor += "-resize"
+	this.style.cursor = cursor
+}
+var holderMouseLeaveListener = function(evt){
+	if(ResizingHolder) return
+	this.style.cursor = ""
+}
+var holderMouseDownListener = function(evt){
+	if(ResizingHolder || (!this.resizer.resizeWidth && !this.resizer.resizeHeight)) return
+	// start resizing
+	ResizingHolder = this
+	var resizer = this.resizer
+	resizer.originalDomX = this.offsetLeft
+	resizer.originalDomY = this.offsetTop
+	resizer.originalDomWidth = this.offsetWidth
+	resizer.originalDomHeight = this.offsetHeight
+	resizer.originalMouseX = evt.pageX
+	resizer.originalMouseY = evt.pageY
+	/*var mover = this.edition.mover
+	if(mover) {
+		Edition.originalMoverX = mover.offsetLeft
+		Edition.originalMoverY = mover.offsetTop
+	}*/
+	// avoid selecting content in page
+	evt.preventDefault()
+}
+App.registerElement("msa-edition-resizer", {
+	oncreate: function() {
+		this.dirs = {}
+		this.dirs.right = this.getAttribute("right") != "false"
+		this.dirs.bottom = this.getAttribute("bottom") != "false"
+		this.dirs.left = this.getAttribute("left") != "false"
+		this.dirs.top = this.getAttribute("top") != "false"
+	},
+	onattach: function(){
+		// link
+		this.holder = this.parentNode
+		this.holder.resizer = this
+		// add holder event listeners
+		this.holder.addEventListener("mousemove", holderMouseMoveListener)
+		this.holder.addEventListener("mouseleave", holderMouseLeaveListener)
+		this.holder.addEventListener("mousedown", holderMouseDownListener)
+	},
+	ondetach: function() {
+		// unlink
+		delete this.holder.resizer
+		// remove holder event listeners
+		this.holder.removeEventListener("mousemove", holderMouseMoveListener)
+		this.holder.removeEventListener("mouseleave", holderMouseLeaveListener)
+		this.holder.removeEventListener("mousedown", holderMouseDownListener)
+	}
+})
+
+document.addEventListener("mouseup", function(evt){
+	// stop resizing
+	ResizingHolder = null
+})
+
+document.addEventListener("mousemove", function(evt){
+	if(!ResizingHolder) return
+	var resizer = ResizingHolder.resizer
+	// determine mouse movement
+	var mouseDiffX = evt.pageX - resizer.originalMouseX
+	var mouseDiffY = evt.pageY - resizer.originalMouseY
+	// determine actions
+	var doMoveX = (resizer.resizeWidth==-1)
+	var doMoveY = (resizer.resizeHeight==-1)
+	var doResizeWidth = (resizer.resizeWidth!==0)
+	var doResizeHeight = (resizer.resizeHeight!==0)
+	// dom resizing
+	if(doResizeWidth) var newWidth = resizer.originalDomWidth + resizer.resizeWidth*mouseDiffX
+	if(doResizeHeight) var newHeight = resizer.originalDomHeight + resizer.resizeHeight*mouseDiffY
+	// keep aspect ratio when resizing both width & height
+	if(doResizeWidth && doResizeHeight) {
+		var newWidth2 = Math.max(newWidth, Math.ceil(newHeight*resizer.originalDomWidth/resizer.originalDomHeight))
+		newHeight = Math.max(newHeight, Math.ceil(newWidth*resizer.originalDomHeight/resizer.originalDomWidth))
+		newWidth = newWidth2
+	}
+	// dom min width & height
+	var newPos = {}
+	if(resizer.resizeWidth) newPos.width = Math.max(10,newWidth)
+	if(resizer.resizeHeight) newPos.height = Math.max(10,newHeight)
+	// dom move due to resizing
+	if(resizer.resizeWidth==-1) {
+		var deltaX = (newWidth - resizer.originalDomWidth)
+		newPos.left = (resizer.originalDomX - deltaX)
+//		if(resizer.mover) resizer.mover.style.left = (resizer.originalMoverX - deltaX)+"px"
+	}
+	if(resizer.resizeHeight==-1) {
+		var deltaY = (newHeight - resizer.originalDomHeight)
+		newPos.top = (resizer.originalDomY - deltaY)
+//		if(domEdition.mover) domEdition.mover.style.top = (Edition.originalMoverY - deltaY)+"px"
+	}
+	// do resize
+	if(resizer.resizeWidth || resizer.resizeHeight)
+		Edition.setPos(ResizingHolder, newPos)
+//	updateChainsPos(Edition.resizingDom)
+})
+
+</script>
+
+<!-- <script>
+	var makeResizableDefaultArgs = ["right","bottom"]
+	var makeResizableTrueArgs = ["right","left","bottom","top"]
+	var makeResizableFalseArgs = []
+	var makeResizable = function(dom, resizable) {
+		if(resizable===undefined) resizable = makeResizableDefaultArgs
+		if(resizable===true) resizable = makeResizableTrueArgs
+		if(resizable===false) resizable = makeResizableFalseArgs
+		if(resizable.length===undefined) resizable = [resizable]
+		if(!dom.edition) dom.edition = {}
+		if(dom.edition.resizableDirs===undefined) dom.edition.resizableDirs = {}
+		dom.edition.resizableDirs.top = (resizable.indexOf("top")!=-1)
+		dom.edition.resizableDirs.bottom = (resizable.indexOf("bottom")!=-1)
+		dom.edition.resizableDirs.left = (resizable.indexOf("left")!=-1)
+		dom.edition.resizableDirs.right = (resizable.indexOf("right")!=-1)
+		dom.edition.resizable = resizable.length>0
+		if(dom.edition.resizable) {
+			saveOriginalHtmlAndCss(dom)
+			addResizableEventListener(dom)
+		}
+	}
+	
+	var addResizableEventListener = function(dom) {
+		var edition = dom.edition
+		if(edition.resizableListernersAdded) return
+		edition.resizableListernersAdded = true
+		
+		dom.addEventListener("mousemove", function(evt){
+			if(Edition.resizingDom || !this.edition.resizable) return
+			// compute position
+			var mouseX = evt.layerX, mouseY = evt.layerY
+			var borderLeft = this.edition.resizableDirs.left && (mouseX<10)
+			var borderRight = this.edition.resizableDirs.right && (this.offsetWidth-mouseX<10)
+			var borderTop = this.edition.resizableDirs.top && (mouseY<10)
+			var borderBottom = this.edition.resizableDirs.bottom && (this.offsetHeight-mouseY<10)
+			// determine action
+			this.edition.resizeWidth = (borderRight ? 1 : (borderLeft ? -1 : 0))
+			this.edition.resizeHeight = (borderBottom ? 1 : (borderTop ? -1 : 0))
+			// determine cursor
+			var cursor = ""
+			if(this.edition.resizeHeight==1) cursor += "s"
+			if(this.edition.resizeHeight==-1) cursor += "n"
+			if(this.edition.resizeWidth==1) cursor += "e"
+			if(this.edition.resizeWidth==-1) cursor += "w"
+			if(cursor!="") cursor += "-resize"
+			this.style.cursor = cursor
+		})
+		
+		dom.addEventListener("mouseleave", function(evt){
+			if(Edition.resizingDom || !this.edition.resizable) return
+			this.style.cursor = ""
+		})
+		
+		dom.addEventListener("mousedown", function(evt){
+			if(Edition.resizingDom || (!this.edition.resizeWidth && !this.edition.resizeHeight)) return
+			// start resizing
+			Edition.resizingDom = this
+			Edition.originalDomX = this.offsetLeft
+			Edition.originalDomY = this.offsetTop
+			Edition.originalDomWidth = this.offsetWidth
+			Edition.originalDomHeight = this.offsetHeight
+			Edition.originalMouseX = evt.pageX
+			Edition.originalMouseY = evt.pageY
+			var mover = this.edition.mover
+			if(mover) {
+				Edition.originalMoverX = mover.offsetLeft
+				Edition.originalMoverY = mover.offsetTop
+			}
+			// avoid selecting content in page
+			evt.preventDefault()
+		})
+	}
+	
+	document.addEventListener("mouseup", function(evt){
+		// stop resizing
+		Edition.resizingDom = null
+	})
+	
+	document.addEventListener("mousemove", function(evt){
+		if(!Edition.resizingDom) return
+		var domEdition = Edition.resizingDom.edition
+		// determine mouse movement
+		var mouseDiffX = evt.pageX - Edition.originalMouseX
+		var mouseDiffY = evt.pageY - Edition.originalMouseY
+		// determine actions
+		var doMoveX = (domEdition.resizeWidth==-1)
+		var doMoveY = (domEdition.resizeHeight==-1)
+		var doResizeWidth = (domEdition.resizeWidth!==0)
+		var doResizeHeight = (domEdition.resizeHeight!==0)
+		// dom resizing
+		if(doResizeWidth) var newWidth = Edition.originalDomWidth + domEdition.resizeWidth*mouseDiffX
+		if(doResizeHeight) var newHeight = Edition.originalDomHeight + domEdition.resizeHeight*mouseDiffY
+		// keep aspect ratio when resizing both width & height
+		if(doResizeWidth && doResizeHeight) {
+			var newWidth2 = Math.max(newWidth, Math.ceil(newHeight*Edition.originalDomWidth/Edition.originalDomHeight))
+			newHeight = Math.max(newHeight, Math.ceil(newWidth*Edition.originalDomHeight/Edition.originalDomWidth))
+			newWidth = newWidth2
+		}
+		// dom min width & height
+		var newPos = {}
+		if(domEdition.resizeWidth) newPos.width = Math.max(10,newWidth)
+		if(domEdition.resizeHeight) newPos.height = Math.max(10,newHeight)
+		// dom move due to resizing
+		if(domEdition.resizeWidth==-1) {
+			var deltaX = (newWidth - Edition.originalDomWidth)
+			newPos.left = (Edition.originalDomX - deltaX)
+			if(domEdition.mover) domEdition.mover.style.left = (Edition.originalMoverX - deltaX)+"px"
+		}
+		if(domEdition.resizeHeight==-1) {
+			var deltaY = (newHeight - Edition.originalDomHeight)
+			newPos.top = (Edition.originalDomY - deltaY)
+			if(domEdition.mover) domEdition.mover.style.top = (Edition.originalMoverY - deltaY)+"px"
+		}
+		// do resize
+		if(domEdition.resizeWidth) setPosX(Edition.resizingDom, newPos)
+		if(domEdition.resizeHeight) setPosY(Edition.resizingDom, newPos)
+		updateChainsPos(Edition.resizingDom)
+	})
+</script> -->

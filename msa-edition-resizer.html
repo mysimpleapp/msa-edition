@@ -1,242 +1,396 @@
 <link rel="import" href="../mysimpleapp/mysimpleapp.pack.html"></link>
-<link rel="import" href="msa-edition.html"></link>
+<style>
+msa-edition-resizer-handle {
+	display: box;
+	position: absolute;
+	outline: 1px solid black;
+	width: 10px;
+	height: 10px;
+	background: #ccc;
+	opacity: 0.4;
+}
+msa-edition-resizer-handle.activated {
+	background: white;
+	opacity: 1;
+}
+</style>
+<template id="msa-edition-resizer">
+	<div class="area"></div>
+</template>
 <script>
-var ResizingHolder = null
-var holderMouseMoveListener = function(evt){
-	if(ResizingHolder) return
-	var resizer = this.resizer, dirs = resizer.dirs
-	// compute position
-	var mouseX = evt.layerX, mouseY = evt.layerY
-	var borderLeft = dirs.left && (mouseX<10)
-	var borderRight = dirs.right && (this.offsetWidth-mouseX<10)
-	var borderTop = dirs.top && (mouseY<10)
-	var borderBottom = dirs.bottom && (this.offsetHeight-mouseY<10)
-	// determine action
-	resizer.resizeWidth = (borderRight ? 1 : (borderLeft ? -1 : 0))
-	resizer.resizeHeight = (borderBottom ? 1 : (borderTop ? -1 : 0))
-	// determine cursor
+(function(){
+
+var _ResizingResizer = null, _ResizingHandle = null
+
+// resizer ///////////////////////////////////////////////
+
+var createResizer = function(target, onStartResize, onResize, handlesOnDblClick, sync, eventKey) {
+	var resizer = {}
+	// link to target
+	resizer.target = target
+	// methods
+	resizer.remove = reziserRemove
+	resizer.onStartResize = onStartResize
+	resizer.onResize = onResize
+	resizer.handlesOnDblClick = handlesOnDblClick
+	resizer.sync = sync
+	resizer.activateHandles = resizerActivateHandles
+	resizer.show = resizerShow
+	resizer.hide = resizerHide
+	// style backuping
+	resizer.backups = {}
+	resizer.backup = resizerBackup
+	resizer.restore = resizerRestore
+	// event
+	resizer.eventKey = eventKey
+	resizer.trigger = resizerTrigger
+	// handles
+	resizer.handles = []
+	createHandle(resizer, "left", "top")
+	createHandle(resizer, null, "top")
+	createHandle(resizer, "right", "top")
+	createHandle(resizer, "right", null)
+	createHandle(resizer, "right", "bottom")
+	createHandle(resizer, null, "bottom")
+	createHandle(resizer, "left", "bottom")
+	createHandle(resizer, "left", null)
+	// do sync
+	if(resizer.sync) resizer.sync()
+	return resizer
+}
+
+var applyOnHandles = function(method) {
+	return function(arg1, arg2) {
+		for(var i=0, handles=this.handles, len=handles.length; i<len; ++i)
+			handles[i][method](arg1, arg2)
+	}
+}
+
+var reziserRemove = applyOnHandles("remove")
+var resizerActivateHandles = applyOnHandles("activate")
+var resizerShow = applyOnHandles("show")
+var resizerHide = applyOnHandles("hide")
+
+// backup a style attr value
+var resizerBackup = function(attr, newVal, compStyle) {
+	var backups = this.backups
+	var target = this.target, style = this.target.style
+	// check if style is not already set to newVal
+	if(newVal!==undefined) {
+		if(!compStyle) compStyle = window.getComputedStyle(target)
+		if(compStyle[attr]===newVal) return
+	}
+	// backup style value (if not already backuped)
+	var val = style[attr]
+	if(backups[attr]===undefined && val!==undefined && val!=="")
+		backups[attr] = val
+	// replace style value (if provided)
+	if(newVal!==undefined)
+		style[attr] = newVal
+}
+
+// restore backuped style vaue
+var resizerRestore = function(attr) {
+	var backups = this.backups
+	if(backups[attr]===undefined) return false
+	this.target.style[attr] = backups[attr]
+	delete backups[attr]
+	return true
+}
+
+// trigger resizer action event
+var resizerTrigger = function() {
+	var target = this.target, eventKey = this.eventKey
+	if(target && eventKey) target.dispatchEvent(new Event(eventKey))
+}
+
+
+// handles ///////////////////////////////////////////////
+
+var createHandle = function(resizer, posX, posY) {
+	// create handle
+	var handle = document.createElement("msa-edition-resizer-handle")
+	handle.activate = handleActivate
+	handle.show = handleShow
+	handle.hide = handleHide
 	var cursor = ""
-	if(resizer.resizeHeight==1) cursor += "s"
-	if(resizer.resizeHeight==-1) cursor += "n"
-	if(resizer.resizeWidth==1) cursor += "e"
-	if(resizer.resizeWidth==-1) cursor += "w"
+	// top bottom
+	handle.posY = posY
+	if(posY==="top") {
+		handle.style.top = "-5px"
+		cursor += "n"
+	} else if(posY==="bottom") {
+		handle.style.bottom = "-5px"
+		cursor += "s"
+	} else handle.style.top = "calc(50% - 2px)"
+	// left right
+	handle.posX = posX
+	if(posX==="left") {
+		handle.style.left = "-5px"
+		cursor += "w"
+	} else if(posX==="right") {
+		handle.style.right = "-5px"
+		cursor += "e"
+	} else handle.style.left = "calc(50% - 2px)"
+	// cursor
 	if(cursor!="") cursor += "-resize"
-	this.style.cursor = cursor
+	handle.style.cursor = cursor
+	// listener
+	handle.addEventListener("mousedown", handleOnMouseDown)
+	handle.addEventListener("dblclick", handleOnDblClick)
+	// append
+	resizer.target.appendChild(handle)
+	resizer.handles.push(handle)
+	handle.resizer = resizer
 }
-var holderMouseLeaveListener = function(evt){
-	if(ResizingHolder) return
-	this.style.cursor = ""
+
+var handleActivate = function(xHandlesActivated, yHandlesActivated) {
+	var posX = this.posX, posY = this.posY
+	var activated = (!posX || xHandlesActivated) && (!posY || yHandlesActivated)
+	if(activated) this.classList.add("activated")
+	else this.classList.remove("activated")
 }
-var holderMouseDownListener = function(evt){
-	if(ResizingHolder || (!this.resizer.resizeWidth && !this.resizer.resizeHeight)) return
-	// start resizing
-	ResizingHolder = this
+
+var handleShow = function() {
+	this.style.display = ''
+}
+
+var handleHide = function() {
+	this.style.display = 'none'
+}
+
+var handleOnMouseDown = function(evt) {
 	var resizer = this.resizer
-	resizer.originalDomX = this.offsetLeft
-	resizer.originalDomY = this.offsetTop
-	resizer.originalDomWidth = this.offsetWidth
-	resizer.originalDomHeight = this.offsetHeight
+	_ResizingResizer = resizer
+	_ResizingHandle = this
+	if(!resizer.onStartResize) return
+	resizer.resizingPosX = this.posX
+	resizer.resizingPosY = this.posY
 	resizer.originalMouseX = evt.pageX
 	resizer.originalMouseY = evt.pageY
-	/*var mover = this.edition.mover
-	if(mover) {
-		Edition.originalMoverX = mover.offsetLeft
-		Edition.originalMoverY = mover.offsetTop
-	}*/
-	// avoid selecting content in page
-	evt.preventDefault()
+	resizer.onStartResize(this)
 }
-App.registerElement("msa-edition-resizer", {
-	oncreate: function() {
-		this.dirs = {}
-		this.dirs.right = this.getAttribute("right") != "false"
-		this.dirs.bottom = this.getAttribute("bottom") != "false"
-		this.dirs.left = this.getAttribute("left") != "false"
-		this.dirs.top = this.getAttribute("top") != "false"
-	},
-	onattach: function(){
-		// link
-		this.holder = this.parentNode
-		this.holder.resizer = this
-		// add holder event listeners
-		this.holder.addEventListener("mousemove", holderMouseMoveListener)
-		this.holder.addEventListener("mouseleave", holderMouseLeaveListener)
-		this.holder.addEventListener("mousedown", holderMouseDownListener)
-	},
-	ondetach: function() {
-		// unlink
-		delete this.holder.resizer
-		// remove holder event listeners
-		this.holder.removeEventListener("mousemove", holderMouseMoveListener)
-		this.holder.removeEventListener("mouseleave", holderMouseLeaveListener)
-		this.holder.removeEventListener("mousedown", holderMouseDownListener)
-	}
-})
 
-document.addEventListener("mouseup", function(evt){
-	// stop resizing
-	ResizingHolder = null
-})
+var handleOnDblClick = function() {
+	var resizer = this.resizer
+	if(resizer.handlesOnDblClick)
+		resizer.handlesOnDblClick(this)
+	resizer.trigger()
+}
 
-document.addEventListener("mousemove", function(evt){
-	if(!ResizingHolder) return
-	var resizer = ResizingHolder.resizer
-	// determine mouse movement
-	var mouseDiffX = evt.pageX - resizer.originalMouseX
-	var mouseDiffY = evt.pageY - resizer.originalMouseY
-	// determine actions
-	var doMoveX = (resizer.resizeWidth==-1)
-	var doMoveY = (resizer.resizeHeight==-1)
-	var doResizeWidth = (resizer.resizeWidth!==0)
-	var doResizeHeight = (resizer.resizeHeight!==0)
-	// dom resizing
-	if(doResizeWidth) var newWidth = resizer.originalDomWidth + resizer.resizeWidth*mouseDiffX
-	if(doResizeHeight) var newHeight = resizer.originalDomHeight + resizer.resizeHeight*mouseDiffY
-	// keep aspect ratio when resizing both width & height
-	if(doResizeWidth && doResizeHeight) {
-		var newWidth2 = Math.max(newWidth, Math.ceil(newHeight*resizer.originalDomWidth/resizer.originalDomHeight))
-		newHeight = Math.max(newHeight, Math.ceil(newWidth*resizer.originalDomHeight/resizer.originalDomWidth))
-		newWidth = newWidth2
-	}
-	// dom min width & height
-	var newPos = {}
-	if(resizer.resizeWidth) newPos.width = Math.max(10,newWidth)
-	if(resizer.resizeHeight) newPos.height = Math.max(10,newHeight)
-	// dom move due to resizing
-	if(resizer.resizeWidth==-1) {
-		var deltaX = (newWidth - resizer.originalDomWidth)
-		newPos.left = (resizer.originalDomX - deltaX)
-//		if(resizer.mover) resizer.mover.style.left = (resizer.originalMoverX - deltaX)+"px"
-	}
-	if(resizer.resizeHeight==-1) {
-		var deltaY = (newHeight - resizer.originalDomHeight)
-		newPos.top = (resizer.originalDomY - deltaY)
-//		if(domEdition.mover) domEdition.mover.style.top = (Edition.originalMoverY - deltaY)+"px"
-	}
-	// do resize
-	if(resizer.resizeWidth || resizer.resizeHeight)
-		Edition.setPos(ResizingHolder, newPos)
-//	updateChainsPos(Edition.resizingDom)
-})
 
+// listeners ///////////////////////////////////////////////
+
+var documentOnMouseMove = function(evt) {
+	var resizer = _ResizingResizer
+	if(!resizer || !resizer.onResize) return
+	var handle = _ResizingHandle
+	var newX = evt.pageX, newY = evt.pageY
+	var diffX = newX-resizer.originalMouseX, diffY = newY-resizer.originalMouseY
+	if(handle.posX=="left") diffX = -diffX
+	if(handle.posY=="top") diffY = -diffY
+	resizer.onResize(diffX, diffY, handle)
+	resizer.trigger()
+}
+
+var documentOnMouseUp = function(evt) {
+	_ResizingResizer = null
+	/*evt.stopPropagation()
+	evt.stopImmediatePropagation()
+	evt.preventDefault()*/
+}
+
+document.addEventListener("mousemove", documentOnMouseMove)
+document.addEventListener("mouseup", documentOnMouseUp)
+// listen also drag events, as they may impeed mouse events to be trigerred
+document.addEventListener("drag", documentOnMouseMove)
+document.addEventListener("dragend", documentOnMouseUp)
+
+
+
+// target callbacks ///////////////////////////////////////////////
+
+var syncMyResizer = function() {
+	var resizer = this.msaEditionResizer
+	if(resizer && resizer.sync) resizer.sync()
+}
+
+
+
+// make resizable generic ///////////////////////////////////////////////
+
+var makeResizableGeneric = function(target, resizable, key, onStartResize, onResize, handlesOnDblClick, sync, eventKey) {
+	if(resizable===undefined) resizable = true
+	var resizer = target[key]
+	if(resizable) {
+		if(resizer) return
+		resizer = createResizer(target, onStartResize, onResize, handlesOnDblClick, sync, eventKey)
+		target[key] = resizer
+		if(eventKey) target.addEventListener(eventKey, syncMyResizer)
+	} else {
+		if(!resizer) return
+		resizer.remove()
+		delete target[key]
+		if(eventKey) target.removeEventListener(eventKey, syncMyResizer)
+	}
+	return resizer
+}
+
+
+// make resizable ///////////////////////////////////////////////
+
+var resizableOnStartResize = function() {
+	var compStyle = window.getComputedStyle(this.target)
+	this.originalTargetWidth = parseFloat(compStyle.width)
+	this.originalTargetHeight = parseFloat(compStyle.height)
+	this.resizeStarted = false
+}
+var resizableOnResize = function(diffX, diffY, handle) {
+	var target = this.target
+	var posX = handle.posX, posY = handle.posY
+	// update width or height
+	if(posX) target.style.width = (this.originalTargetWidth+diffX)+"px"
+	if(posY) target.style.height = (this.originalTargetHeight+diffY)+"px"
+	// remove attr style that may impeed width & height to apply
+	if(!this.resizeStarted) removeStretch(this, handle)
+	this.resizeStarted = true
+}
+var resizableHandlesOnDblClick = function(handle) {
+	var target = this.target
+	var posX = handle.posX, posY = handle.posY
+	// remove width or height
+	if(posX) target.style.width = ""
+	if(posY) target.style.height = ""
+	// switch between "stretch" & "just"
+	switchStretchToJust(this, handle)
+}
+var removeStretch = function(resizer, handle) {
+	var target = resizer.target
+	var posX = handle.posX, posY = handle.posY
+	// determine flex direction
+	var flexDir = getFlexDirection(target)
+	var compStyle = window.getComputedStyle(target)
+	// if handle manages flex direction
+	if((posX && flexDir=='x') || (posY && flexDir=='y')) {
+		// justify (if needed)
+		if(isFlexStretch(target, compStyle))
+			setFlexJust(resizer, compStyle)
+	}
+	// if handle manages non-flex direction
+	if((posX && flexDir=='y') || (posY && flexDir=='x')) {
+		// justify (if needed)
+		if(isAlignStretch(target, compStyle))
+			setAlignJust(resizer, compStyle)
+	}
+}
+var switchStretchToJust = function(resizer, handle) {
+	var target = resizer.target
+	var posX = handle.posX, posY = handle.posY
+	// determine flex direction
+	var flexDir = getFlexDirection(target)
+	// determine position
+	var compStyle = window.getComputedStyle(target)
+	var pos = (compStyle.position=="absolute") ? "float" : "inline"
+	// if handle manages flex direction
+	if((posX && flexDir=='x') || (posY && flexDir=='y')) {
+		// if target floating: justify
+		if(pos=="float") setFlexJust(resizer, compStyle)
+		// if something is backuped: restore it
+		else if(resizer.restore("flex")) {}
+		// else switch between stretch & justify
+		else if(isFlexStretch(target, compStyle)) setFlexJust(resizer, compStyle)
+		else setFlexStretch(resizer, compStyle)
+	}
+	// if handle manages non-flex direction
+	if((posX && flexDir=='y') || (posY && flexDir=='x')) {
+		// if target floating: justify
+		if(pos=="float") setAlignJust(resizer, compStyle)
+		// if something is backuped: restore it
+		else if(resizer.restore("alignSelf")) {}
+		// else switch between stretch & justify
+		else if(isAlignStretch(target, compStyle)) setAlignJust(resizer, compStyle)
+		else setAlignStretch(resizer, compStyle)
+	}
+}
+var resizableSync = function() {
+	var target = this.target
+	var flex = getFlex(target)
+	var xHandlesActivated = (target.style.width != false && flex!='x')
+	var yHandlesActivated = (target.style.height != false && flex!='y')
+	this.activateHandles(xHandlesActivated, yHandlesActivated)
+}
+var makeResizable = function(target, resizable) {
+	return makeResizableGeneric(target, resizable,
+		"msaEditionResizer",
+		resizableOnStartResize,
+		resizableOnResize,
+		resizableHandlesOnDblClick,
+		resizableSync,
+		"resize")
+}
+
+
+// various ///////////////////////////////////////////////
+
+// determine if parent node has set "flexDirection", and which one
+var getFlexDirection = function(target) {
+	var parentStyle = window.getComputedStyle(target.parentNode)
+	if(parentStyle.display == "flex") {
+		var parentFlexDirection = parentStyle.flexDirection
+		if(parentFlexDirection == "row" || parentFlexDirection == "row-reverse")
+			return 'x'
+		else if(parentFlexDirection == "column" || parentFlexDirection == "column-reverse")
+			return 'y'
+	}
+	return false
+
+}
+
+// determine if target "flex" is active, and in which direction
+var getFlex = function(target) {
+	if(isFlexStretch(target))
+		return getFlexDirection(target)
+	return false
+}
+
+// tell if target is stretch in flex direction
+var isFlexStretch = function(target, compStyle) {
+	if(!compStyle) compStyle = window.getComputedStyle(target)
+	return (compStyle.flexGrow!="0")
+}
+
+// tell if target is stretch in non-flex direction
+var isAlignStretch = function(target, compStyle) {
+	if(!compStyle) compStyle = window.getComputedStyle(target)
+	return (compStyle.alignSelf=="stretch")
+}
+
+// justify target in flex direction
+var setFlexJust = function(resizer, compStyle) {
+	resizer.backup("flex", "none", compStyle)
+}
+
+// stretchify target in flex direction
+var setFlexStretch = function(resizer, compStyle) {
+	resizer.backup("flex", "1", compStyle)
+}
+
+// justify target in non-flex direction
+var setAlignJust = function(resizer, compStyle) {
+	if(!compStyle) compStyle = window.getComputedStyle(resizer.target)
+	if(compStyle.alignSelf==="stretch")
+		resizer.backup("alignSelf", "flex-start")
+}
+
+// stretchify target in non-flex direction
+var setAlignStretch = function(resizer, compStyle) {
+	resizer.backup("alignSelf", "stretch", compStyle)
+}
+
+// publication ///////////////////////////////////////////////
+
+if(!document.MsaEdition) document.MsaEdition = MsaEdition = {}
+MsaEdition.makeResizable = makeResizable
+
+})()
 </script>
-
-<!-- <script>
-	var makeResizableDefaultArgs = ["right","bottom"]
-	var makeResizableTrueArgs = ["right","left","bottom","top"]
-	var makeResizableFalseArgs = []
-	var makeResizable = function(dom, resizable) {
-		if(resizable===undefined) resizable = makeResizableDefaultArgs
-		if(resizable===true) resizable = makeResizableTrueArgs
-		if(resizable===false) resizable = makeResizableFalseArgs
-		if(resizable.length===undefined) resizable = [resizable]
-		if(!dom.edition) dom.edition = {}
-		if(dom.edition.resizableDirs===undefined) dom.edition.resizableDirs = {}
-		dom.edition.resizableDirs.top = (resizable.indexOf("top")!=-1)
-		dom.edition.resizableDirs.bottom = (resizable.indexOf("bottom")!=-1)
-		dom.edition.resizableDirs.left = (resizable.indexOf("left")!=-1)
-		dom.edition.resizableDirs.right = (resizable.indexOf("right")!=-1)
-		dom.edition.resizable = resizable.length>0
-		if(dom.edition.resizable) {
-			saveOriginalHtmlAndCss(dom)
-			addResizableEventListener(dom)
-		}
-	}
-	
-	var addResizableEventListener = function(dom) {
-		var edition = dom.edition
-		if(edition.resizableListernersAdded) return
-		edition.resizableListernersAdded = true
-		
-		dom.addEventListener("mousemove", function(evt){
-			if(Edition.resizingDom || !this.edition.resizable) return
-			// compute position
-			var mouseX = evt.layerX, mouseY = evt.layerY
-			var borderLeft = this.edition.resizableDirs.left && (mouseX<10)
-			var borderRight = this.edition.resizableDirs.right && (this.offsetWidth-mouseX<10)
-			var borderTop = this.edition.resizableDirs.top && (mouseY<10)
-			var borderBottom = this.edition.resizableDirs.bottom && (this.offsetHeight-mouseY<10)
-			// determine action
-			this.edition.resizeWidth = (borderRight ? 1 : (borderLeft ? -1 : 0))
-			this.edition.resizeHeight = (borderBottom ? 1 : (borderTop ? -1 : 0))
-			// determine cursor
-			var cursor = ""
-			if(this.edition.resizeHeight==1) cursor += "s"
-			if(this.edition.resizeHeight==-1) cursor += "n"
-			if(this.edition.resizeWidth==1) cursor += "e"
-			if(this.edition.resizeWidth==-1) cursor += "w"
-			if(cursor!="") cursor += "-resize"
-			this.style.cursor = cursor
-		})
-		
-		dom.addEventListener("mouseleave", function(evt){
-			if(Edition.resizingDom || !this.edition.resizable) return
-			this.style.cursor = ""
-		})
-		
-		dom.addEventListener("mousedown", function(evt){
-			if(Edition.resizingDom || (!this.edition.resizeWidth && !this.edition.resizeHeight)) return
-			// start resizing
-			Edition.resizingDom = this
-			Edition.originalDomX = this.offsetLeft
-			Edition.originalDomY = this.offsetTop
-			Edition.originalDomWidth = this.offsetWidth
-			Edition.originalDomHeight = this.offsetHeight
-			Edition.originalMouseX = evt.pageX
-			Edition.originalMouseY = evt.pageY
-			var mover = this.edition.mover
-			if(mover) {
-				Edition.originalMoverX = mover.offsetLeft
-				Edition.originalMoverY = mover.offsetTop
-			}
-			// avoid selecting content in page
-			evt.preventDefault()
-		})
-	}
-	
-	document.addEventListener("mouseup", function(evt){
-		// stop resizing
-		Edition.resizingDom = null
-	})
-	
-	document.addEventListener("mousemove", function(evt){
-		if(!Edition.resizingDom) return
-		var domEdition = Edition.resizingDom.edition
-		// determine mouse movement
-		var mouseDiffX = evt.pageX - Edition.originalMouseX
-		var mouseDiffY = evt.pageY - Edition.originalMouseY
-		// determine actions
-		var doMoveX = (domEdition.resizeWidth==-1)
-		var doMoveY = (domEdition.resizeHeight==-1)
-		var doResizeWidth = (domEdition.resizeWidth!==0)
-		var doResizeHeight = (domEdition.resizeHeight!==0)
-		// dom resizing
-		if(doResizeWidth) var newWidth = Edition.originalDomWidth + domEdition.resizeWidth*mouseDiffX
-		if(doResizeHeight) var newHeight = Edition.originalDomHeight + domEdition.resizeHeight*mouseDiffY
-		// keep aspect ratio when resizing both width & height
-		if(doResizeWidth && doResizeHeight) {
-			var newWidth2 = Math.max(newWidth, Math.ceil(newHeight*Edition.originalDomWidth/Edition.originalDomHeight))
-			newHeight = Math.max(newHeight, Math.ceil(newWidth*Edition.originalDomHeight/Edition.originalDomWidth))
-			newWidth = newWidth2
-		}
-		// dom min width & height
-		var newPos = {}
-		if(domEdition.resizeWidth) newPos.width = Math.max(10,newWidth)
-		if(domEdition.resizeHeight) newPos.height = Math.max(10,newHeight)
-		// dom move due to resizing
-		if(domEdition.resizeWidth==-1) {
-			var deltaX = (newWidth - Edition.originalDomWidth)
-			newPos.left = (Edition.originalDomX - deltaX)
-			if(domEdition.mover) domEdition.mover.style.left = (Edition.originalMoverX - deltaX)+"px"
-		}
-		if(domEdition.resizeHeight==-1) {
-			var deltaY = (newHeight - Edition.originalDomHeight)
-			newPos.top = (Edition.originalDomY - deltaY)
-			if(domEdition.mover) domEdition.mover.style.top = (Edition.originalMoverY - deltaY)+"px"
-		}
-		// do resize
-		if(domEdition.resizeWidth) setPosX(Edition.resizingDom, newPos)
-		if(domEdition.resizeHeight) setPosY(Edition.resizingDom, newPos)
-		updateChainsPos(Edition.resizingDom)
-	})
-</script> -->

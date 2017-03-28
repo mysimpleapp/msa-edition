@@ -1,0 +1,41 @@
+<script>
+(function(){
+
+if(!document.MsaEdition) document.MsaEdition = MsaEdition = {}
+
+MsaEdition.isSize = function(size) {
+	return size.search(/^[0-9.]+[px%]+$/)!=-1
+}
+MsaEdition.getSizeVal = function(size) {
+	return size.match(/^[0-9.]*/)[0]
+}
+MsaEdition.getSizeUnit = function(size) {
+	return size.match(/[a-z%]*$/)[0]
+}
+
+MsaEdition.backUpdStyle = function(target, attr, newVal, compStyle) {
+	var backups = target.styleBackups
+	if(!backups) backups = target.styleBackups = {}
+	if(!compStyle) compStyle = window.getComputedStyle(target)
+	var val = compStyle[attr]
+	if(val===newVal) return
+	// backup style value (if not already backuped)
+	if(backups[attr]===undefined && val!==undefined && val!=="")
+		backups[attr] = val
+	// replace style value
+	target.style[attr] = newVal
+}
+
+MsaEdition.restoreStyle = function(target, attr, defVal) {
+	var backups = target.styleBackups
+	if(!backups) backups = target.styleBackups = {}
+	var style = target.style, val = backups[attr]
+	if(val === undefined) val = defVal
+	if(val === undefined) return false
+	style[attr] = val
+	delete backups[attr]
+	return true
+}
+
+})()
+</script>

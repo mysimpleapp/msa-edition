@@ -9,7 +9,7 @@
 <script>
 (function() {
 	// create msa-box element
-	App.registerElement("msa-box", {oncreate: function(){
+	Msa.registerElement("msa-box", {oncreate: function(){
 		this.isBox = true
 	}})
 	// retrieve box content from server
@@ -21,7 +21,7 @@
 			var cache = BoxCache[src]
 			if(cache===undefined) {
 				BoxCache[src] = [box]
-				App.get(src, null, function(data){
+				Msa.get(src, null, function(data){
 					var boxes = BoxCache[src]
 					BoxCache[src] = data
 					for(var b=0, len=boxes.length; b<len; ++b)
@@ -39,7 +39,7 @@
 		box.content.innerHTML = data.body
 	}
 	// create msa-box-partial element
-	App.registerElement("msa-box-partial", {shadow:"#msa-box-partial",
+	Msa.registerElement("msa-box-partial", {shadow:"#msa-box-partial",
 		oncreate: function(){
 			this.isBox = true
 			this.isBoxPartial = true

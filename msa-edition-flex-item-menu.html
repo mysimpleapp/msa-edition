@@ -1,4 +1,5 @@
 <link rel="import" href="../mysimpleapp/mysimpleapp.pack.html"></link>
+<link rel="import" href="msa-edition-common.html"></link>
 <link rel="import" href="../msa-popup/msa-popup.html"></link>
 <!-- SVGs -->
 <svg id="msa-edition-flex-item-menu-svg" style="display:none">
@@ -94,7 +95,7 @@
 </svg>
 <script>
 (function(){
-	var doc = App.getOwnerDocument()
+	var doc = Msa.getOwnerDocument()
 	var svg = doc.querySelector("svg#msa-edition-flex-item-menu-svg")
 	document.body.appendChild(svg)
 })()
@@ -302,10 +303,16 @@ msa-edition-flex-item-menu .value input {
 <script>
 (function() {
 
+var isSize = MsaEdition.isSize
+var getSizeVal = MsaEdition.getSizeVal
+var getSizeUnit = MsaEdition.getSizeUnit
+var backUpdStyle = MsaEdition.backUpdStyle
+var restoreStyle = MsaEdition.restoreStyle
+
 // msa-edition-flex-item-menu //////////////////////////////////////
 
 // register element
-App.registerElement("msa-edition-flex-item-menu", {
+Msa.registerElement("msa-edition-flex-item-menu", {
 	template:"#msa-edition-flex-item-menu",
 	oncreate: function(){
 
@@ -565,7 +572,7 @@ var menuSyncValue = function(type, query, computedStyle, attr) {
 	valueObj.attr = attr
 	// get size
 	var size = target.style[attr] || computedStyle[getAssociatedComputedStyleAttr(attr)]
-	if(!matchSize(size)) size = "0px"
+	if(!isSize(size)) size = "0px"
 	var val = getSizeVal(size), unit = getSizeUnit(size)
 	// sync val input
 	valueObj.val = val
@@ -589,7 +596,12 @@ var setPositionInline = function(target) {
 	target.style.position = ""
 	computedStyle = window.getComputedStyle(target)
 	// else force position to "static"
-	if(computedStyle.position == "absolute" ) target.style.position = "static"	
+	if(computedStyle.position == "absolute" ) target.style.position = "static"
+	// remove top, bottom, width, height (as they may be created by absolute positioning, and may interfer with relative position)
+	backUpdStyle(target, "left", "")
+	backUpdStyle(target, "right", "")
+	backUpdStyle(target, "top", "")
+	backUpdStyle(target, "bottom", "")
 }
 menuActions[".icon.row-inline"] = menuActions[".icon.column-inline"] = function() {
 	var menu=this.menu, target=menu.target
@@ -600,11 +612,21 @@ var setPositionFloat = function(target) {
 	// update target position
 	target.style.position = "absolute"
 	// set top & left, if necessary
-	var computedStyle = window.getComputedStyle(target)
-	var xSize = target.style.left || target.style.right || computedStyle.left
+	var compStyle = window.getComputedStyle(target)
+	/*var xSize = target.style.left || target.style.right || computedStyle.left
 	var ySize = target.style.top || target.style.bottom || computedStyle.top
-	if(!matchSize(xSize)) target.style.left = "0px"
-	if(!matchSize(ySize)) target.style.top = "0px"
+	if(!isSize(xSize)) target.style.left = "0px"
+	if(!isSize(ySize)) target.style.top = "0px"*/
+
+	var xSize = target.style.left || target.style.right
+	if(!xSize) restoreStyle(target, "left") || restoreStyle(target, "right")
+	xSize = target.style.left || target.style.right || compStyle.left
+	if(!isSize(xSize)) target.style.left = "0px"
+
+	var ySize = target.style.top || target.style.bottom
+	if(!ySize) restoreStyle(target, "top") || restoreStyle(target, "bottom")
+	ySize = target.style.top || target.style.bottom || compStyle.top
+	if(!isSize(ySize)) target.style.top = "0px"
 }
 menuActions[".icon.row-float"] = menuActions[".icon.column-float"] = function() {
 	var menu=this.menu, target=menu.target
@@ -777,15 +799,6 @@ var getOptionIndexFromText = function(selectDom, optionText) {
 			res = i
 	}
 	return res
-}
-var matchSize = function(size) {
-	return size.search(/^[0-9.]+[px%]+$/)!=-1
-}
-var getSizeVal = function(size) {
-	return size.match(/^[0-9.]*/)[0]
-}
-var getSizeUnit = function(size) {
-	return size.match(/[a-z%]*$/)[0]
 }
 
 // publish

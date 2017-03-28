@@ -1,5 +1,5 @@
 <link rel="import" href="../mysimpleapp/mysimpleapp.pack.html"></link>
-<link rel="import" href="msa-edition.html"></link>
+<link rel="import" href="msa-edition-common.html"></link>
 <style>
 msa-edition-mover {
 	position: absolute;
@@ -24,9 +24,13 @@ msa-edition-mover input {
 <script>
 (function(){
 
+var isSize = MsaEdition.isSize
+var getSizeVal = MsaEdition.getSizeVal
+var getSizeUnit = MsaEdition.getSizeUnit
+
 var _MovingMover = null
 
-App.registerElement("msa-edition-mover", {template:"#msa-edition-mover",
+Msa.registerElement("msa-edition-mover", {template:"#msa-edition-mover",
 	onattach: function(){
 		this.target = this.parentNode
 		this.target.msaEditionMover = this
@@ -38,6 +42,7 @@ App.registerElement("msa-edition-mover", {template:"#msa-edition-mover",
 	oncreate: function(){
 		this.show = moverShow
 		this.hide = moverHide
+		this.setAttribute("msa-editor", true)
 		this.addEventListener("mousedown", function(evt){
 			var target = this.target
 			if(!target) return

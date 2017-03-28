@@ -1,4 +1,5 @@
 <link rel="import" href="../mysimpleapp/mysimpleapp.pack.html"></link>
+<link rel="import" href="msa-edition-common.html"></link>
 <style>
 msa-edition-resizer-handle {
 	display: box;
@@ -20,6 +21,9 @@ msa-edition-resizer-handle.activated {
 <script>
 (function(){
 
+var backUpdStyle = MsaEdition.backUpdStyle
+var restoreStyle = MsaEdition.restoreStyle
+
 var _ResizingResizer = null, _ResizingHandle = null
 
 // resizer ///////////////////////////////////////////////
@@ -38,9 +42,9 @@ var createResizer = function(target, onStartResize, onResize, handlesOnDblClick,
 	resizer.show = resizerShow
 	resizer.hide = resizerHide
 	// style backuping
-	resizer.backups = {}
+	/*resizer.backups = {}
 	resizer.backup = resizerBackup
-	resizer.restore = resizerRestore
+	resizer.restore = resizerRestore*/
 	// event
 	resizer.eventKey = eventKey
 	resizer.trigger = resizerTrigger
@@ -59,44 +63,18 @@ var createResizer = function(target, onStartResize, onResize, handlesOnDblClick,
 	return resizer
 }
 
-var applyOnHandles = function(method) {
+var applyOnHandles = function(method, doSync) {
 	return function(arg1, arg2) {
 		for(var i=0, handles=this.handles, len=handles.length; i<len; ++i)
 			handles[i][method](arg1, arg2)
+		if(doSync && this.sync) this.sync()
 	}
 }
 
 var reziserRemove = applyOnHandles("remove")
 var resizerActivateHandles = applyOnHandles("activate")
-var resizerShow = applyOnHandles("show")
+var resizerShow = applyOnHandles("show", true)
 var resizerHide = applyOnHandles("hide")
-
-// backup a style attr value
-var resizerBackup = function(attr, newVal, compStyle) {
-	var backups = this.backups
-	var target = this.target, style = this.target.style
-	// check if style is not already set to newVal
-	if(newVal!==undefined) {
-		if(!compStyle) compStyle = window.getComputedStyle(target)
-		if(compStyle[attr]===newVal) return
-	}
-	// backup style value (if not already backuped)
-	var val = style[attr]
-	if(backups[attr]===undefined && val!==undefined && val!=="")
-		backups[attr] = val
-	// replace style value (if provided)
-	if(newVal!==undefined)
-		style[attr] = newVal
-}
-
-// restore backuped style vaue
-var resizerRestore = function(attr) {
-	var backups = this.backups
-	if(backups[attr]===undefined) return false
-	this.target.style[attr] = backups[attr]
-	delete backups[attr]
-	return true
-}
 
 // trigger resizer action event
 var resizerTrigger = function() {
@@ -113,6 +91,7 @@ var createHandle = function(resizer, posX, posY) {
 	handle.activate = handleActivate
 	handle.show = handleShow
 	handle.hide = handleHide
+	handle.setAttribute("msa-editor", true)
 	var cursor = ""
 	// top bottom
 	handle.posY = posY
@@ -296,7 +275,7 @@ var switchStretchToJust = function(resizer, handle) {
 		// if target floating: justify
 		if(pos=="float") setFlexJust(resizer, compStyle)
 		// if something is backuped: restore it
-		else if(resizer.restore("flex")) {}
+		else if(restoreStyle(target, "flex")) {}
 		// else switch between stretch & justify
 		else if(isFlexStretch(target, compStyle)) setFlexJust(resizer, compStyle)
 		else setFlexStretch(resizer, compStyle)
@@ -306,14 +285,73 @@ var switchStretchToJust = function(resizer, handle) {
 		// if target floating: justify
 		if(pos=="float") setAlignJust(resizer, compStyle)
 		// if something is backuped: restore it
-		else if(resizer.restore("alignSelf")) {}
+		else if(restoreStyle(target, "alignSelf")) {}
 		// else switch between stretch & justify
 		else if(isAlignStretch(target, compStyle)) setAlignJust(resizer, compStyle)
 		else setAlignStretch(resizer, compStyle)
 	}
 }
+/*var resizableSync = function() {
+	var target = this.target
+	// set size
+	var targetRect = target.getBoundingClientRect()
+	var targetLeft = targetRect.left
+	var targetTop = targetRect.top
+	var targetWidth = targetRect.width
+	var targetHeight = targetRect.height
+	// for each handle
+	this.handles.forEach(function(handle){
+		var style = handle.style, posX = handle.posX, posY = handle.posY
+		// basic psosition
+		if(!posX || posX=="left") style.left = "0px"
+		if(posX=="right") style.right = "0px"
+		if(!posY || posY=="top" || !posY) style.top = "0px"
+		if(posY=="bottom") style.bottom = "0px"
+		// view resulting position
+		var handleRect = handle.getBoundingClientRect()
+		var handleLeft = handleRect.left
+		var handleTop = handleRect.top
+		// left / right
+		if(posX=="left") style.left = (targetLeft - handleLeft - 5) +"px"
+		if(!posX) style.left = (targetLeft + targetWidth/2 - handleLeft) +"px"
+		if(posX=="right") style.right = -(targetLeft + targetWidth - handleLeft - 5) +"px"
+		// top / bottom
+		if(posY=="top") style.top = (targetTop - handleTop - 5) +"px"
+		if(!posY) style.top = (targetTop + targetHeight/2 - handleTop) +"px"
+		if(posY=="bottom") style.bottom = -(targetTop + targetHeight - handleTop - 5) +"px"
+	})
+	// activate handles
+	var flex = getFlex(target)
+	var xHandlesActivated = (target.style.width != false && flex!='x')
+	var yHandlesActivated = (target.style.height != false && flex!='y')
+	this.activateHandles(xHandlesActivated, yHandlesActivated)
+}*/
 var resizableSync = function() {
 	var target = this.target
+	// set size
+	var targetLeft = target.offsetLeft
+	var targetTop = target.offsetTop
+	var targetWidth = target.offsetWidth
+	var targetHeight = target.offsetHeight
+	var targetPosition = window.getComputedStyle(target).position
+	var relativeToTarget = (targetPosition=="absolute" || targetPosition=="relative")
+	if(relativeToTarget) {
+		targetLeft = 0
+		targetTop = 0
+	}
+	// for each handle
+	this.handles.forEach(function(handle){
+		var style = handle.style, posX = handle.posX, posY = handle.posY
+		// left / right
+		if(posX=="left") style.left = (targetLeft - 5) +"px"
+		if(!posX) style.left = (targetLeft + targetWidth/2) +"px"
+		if(posX=="right") style.left = (targetLeft + targetWidth - 5) +"px"
+		// top / bottom
+		if(posY=="top") style.top = (targetTop - 5) +"px"
+		if(!posY) style.top = (targetTop + targetHeight/2) +"px"
+		if(posY=="bottom") style.top = (targetTop + targetHeight - 5) +"px"
+	})
+	// activate handles
 	var flex = getFlex(target)
 	var xHandlesActivated = (target.style.width != false && flex!='x')
 	var yHandlesActivated = (target.style.height != false && flex!='y')
@@ -343,7 +381,6 @@ var getFlexDirection = function(target) {
 			return 'y'
 	}
 	return false
-
 }
 
 // determine if target "flex" is active, and in which direction
@@ -367,24 +404,24 @@ var isAlignStretch = function(target, compStyle) {
 
 // justify target in flex direction
 var setFlexJust = function(resizer, compStyle) {
-	resizer.backup("flex", "none", compStyle)
+	backUpdStyle(resizer.target, "flex", "none", compStyle)
 }
 
 // stretchify target in flex direction
 var setFlexStretch = function(resizer, compStyle) {
-	resizer.backup("flex", "1", compStyle)
+	backUpdStyle(resizer.target, "flex", "1", compStyle)
 }
 
 // justify target in non-flex direction
 var setAlignJust = function(resizer, compStyle) {
 	if(!compStyle) compStyle = window.getComputedStyle(resizer.target)
 	if(compStyle.alignSelf==="stretch")
-		resizer.backup("alignSelf", "flex-start")
+		backUpdStyle(resizer.target, "alignSelf", "flex-start", compStyle)
 }
 
 // stretchify target in non-flex direction
 var setAlignStretch = function(resizer, compStyle) {
-	resizer.backup("alignSelf", "stretch", compStyle)
+	backUpdStyle(resizer.target, "alignSelf", "stretch", compStyle)
 }
 
 // publication ///////////////////////////////////////////////

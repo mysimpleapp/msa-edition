@@ -1,4 +1,4 @@
-<link rel="import" href="../mysimpleapp/mysimpleapp.pack.html"></link>
+<link rel="import" href="../mysimpleapp/mysimpleapp.html"></link>
 <link rel="import" href="msa-edition-common.html"></link>
 <style>
 msa-edition-mover {
@@ -24,56 +24,68 @@ msa-edition-mover input {
 <script>
 (function(){
 
-var isSize = MsaEdition.isSize
-var getSizeVal = MsaEdition.getSizeVal
-var getSizeUnit = MsaEdition.getSizeUnit
+
+// mover ///////////////////////////////////////////
 
 var _MovingMover = null
 
-Msa.registerElement("msa-edition-mover", {template:"#msa-edition-mover",
-	onattach: function(){
-		this.target = this.parentNode
-		this.target.msaEditionMover = this
-	},
-	ondetach: function() {
-		delete this.target.msaEditionMover
-		delete this.target
-	},
-	oncreate: function(){
-		this.show = moverShow
-		this.hide = moverHide
-		this.setAttribute("msa-editor", true)
-		this.addEventListener("mousedown", function(evt){
-			var target = this.target
-			if(!target) return
-			_MovingMover = this
-			//this.oldX = this.offsetLeft
-			//this.oldY = this.offsetTop
-			var style = target.style,
-				computedStyle = window.getComputedStyle(target)
-			this.targetPosAttrX = style.left ? "left" : ( style.right ? "right" : "left" )
-			this.targetPosAttrY = style.top ? "top" : ( style.bottom ? "bottom" : "top" )
-			var sizeX = style[this.targetPosAttrX] || computedStyle[this.targetPosAttrX]
-			var sizeY = style[this.targetPosAttrY] || computedStyle[this.targetPosAttrY]
-			this.oldTargetPosValX = parseFloat(getPosVal(sizeX))
-			this.oldTargetPosValY = parseFloat(getPosVal(sizeY))
-			this.targetPosUnitX = getPosUnit(sizeX)
-			this.targetPosUnitY = getPosUnit(sizeY)
-			this.oldTargetOffsetX = target.offsetLeft
-			this.oldTargetOffsetY = target.offsetTop
-			this.oldMouseX = evt.pageX
-			this.oldMouseY = evt.pageY
-			// avoid selecting content in page
-			evt.preventDefault()
-		})
-	}
-})
-var moverShow = function() {
+var moverMethods = {}
+moverMethods.link = function(target) {
+	this.target = target
+	target.msaEditionMover = this
+}
+moverMethods.unlink = function(target) {
+	delete this.target.msaEditionMover
+	delete this.target
+}
+moverMethods.show = function() {
 	this.style.display = ""
 }
-var moverHide = function() {
+moverMethods.hide = function() {
 	this.style.display = "none"
 }
+
+var moverOnMouseDown = function(evt){
+	var target = this.target
+	if(!target) return
+	_MovingMover = this
+	// save target position
+	var style = target.style,
+		compStyle = window.getComputedStyle(target)
+	this.targetPosAttrX = style.left ? "left" : ( style.right ? "right" : "left" )
+	this.targetPosAttrY = style.top ? "top" : ( style.bottom ? "bottom" : "top" )
+	var sizeX = style[this.targetPosAttrX] || compStyle[this.targetPosAttrX]
+	var sizeY = style[this.targetPosAttrY] || compStyle[this.targetPosAttrY]
+	this.oldTargetPosValX = parseFloat(getPosVal(sizeX))
+	this.oldTargetPosValY = parseFloat(getPosVal(sizeY))
+	this.targetPosUnitX = getPosUnit(sizeX)
+	this.targetPosUnitY = getPosUnit(sizeY)
+	this.oldTargetOffsetX = target.offsetLeft
+	this.oldTargetOffsetY = target.offsetTop
+	this.oldMouseX = evt.pageX
+	this.oldMouseY = evt.pageY
+	// avoid selecting content in page
+	evt.preventDefault()
+}
+
+Msa.registerElement("msa-edition-mover", {template:"#msa-edition-mover",
+	oncreate: function(){
+		Object.assign(this, moverMethods)
+		this.setAttribute("msa-editor", true)
+		this.addEventListener("mousedown", moverOnMouseDown)
+	},
+	onattach: function(){
+		this.link(this.parentNode)
+	},
+	ondetach: function() {
+		this.unlink()
+	}
+})
+
+
+
+// document listener //////////////////////////////////////////////
+
 document.addEventListener("mouseup", function(evt){
 	_MovingMover = null
 })
@@ -103,7 +115,15 @@ document.addEventListener("mousemove", function(evt){
 	// trigger "move" event
 	target.dispatchEvent(new Event("move"))
 })
-// various
+
+
+
+// various ///////////////////////////////////////////////
+
+var isSize = MsaEdition.isSize
+var getSizeVal = MsaEdition.getSizeVal
+var getSizeUnit = MsaEdition.getSizeUnit
+
 var getPosVal = function(size) {
 	return size.match(/^[0-9.]*/)[0]
 }
@@ -114,10 +134,15 @@ var computeRatio = function(val1, val2) {
 	if(val1===0 && val2===0) return 1
 	return val1 / val2
 }
-// make movable
+
+
+
+// main function ////////////////////////////////////////
+
 if(!document.MsaEdition) document.MsaEdition = MsaEdition = {}
 MsaEdition.makeMovable = function(target, movable) {
 	if(movable===undefined) movable = true
+	if(typeof target==="string") target = document.querySelectorAll(target)
 	var mover = target.msaEditionMover
 	if(movable) {
 		// create & reference mover (if not already exists)
@@ -132,5 +157,6 @@ MsaEdition.makeMovable = function(target, movable) {
 	}
 	return mover
 }
+
 })()
 </script>

@@ -1,4 +1,4 @@
-<link rel="import" href="../mysimpleapp/mysimpleapp.pack.html"></link>
+<link rel="import" href="../mysimpleapp/mysimpleapp.html"></link>
 <link rel="import" href="msa-edition-common.html"></link>
 <link rel="import" href="../msa-popup/msa-popup.html"></link>
 <!-- SVGs -->
@@ -95,7 +95,7 @@
 </svg>
 <script>
 (function(){
-	var doc = Msa.getOwnerDocument()
+	var doc = Msa.getDoc()
 	var svg = doc.querySelector("svg#msa-edition-flex-item-menu-svg")
 	document.body.appendChild(svg)
 })()
@@ -284,11 +284,6 @@ msa-edition-flex-item-menu .value input {
 			</span>
 		</div>
 	</div>
-	<br/>
-	<div style="text-align:right">
-		<button class="cancel">Cancel</button>
-		<button class="ok">OK</button>
-	</div>
 </template>
 <template id="msa-edition-flex-item-menu-size-changer">
 	<input class="act" type="checkbox">
@@ -306,77 +301,17 @@ msa-edition-flex-item-menu .value input {
 var isSize = MsaEdition.isSize
 var getSizeVal = MsaEdition.getSizeVal
 var getSizeUnit = MsaEdition.getSizeUnit
-var backUpdStyle = MsaEdition.backUpdStyle
-var restoreStyle = MsaEdition.restoreStyle
+var trigger = MsaEdition.trigger
+var backup = MsaEdition.backup
+var restore = MsaEdition.restore
 
 // msa-edition-flex-item-menu //////////////////////////////////////
 
-// register element
-Msa.registerElement("msa-edition-flex-item-menu", {
-	template:"#msa-edition-flex-item-menu",
-	oncreate: function(){
+// methods
 
-		// create as popup
-		this.linkTo = menuLinkTo
-		this.unlink = menuUnlink
-		this.backupStyle = menuBackupStyle
-		this.restoreStyle = menuRestoreStyle
-		this.show = menuShow
-		this.hide = menuHide
+var menuMethods = {}
 
-		document.body.appendChild(this)
-
-		// movable
-		MsaEdition.makeMovable(this)
-
-		// close button
-		var menu = this
-		var cancelButton = this.querySelector("button.cancel")
-		cancelButton.onclick = function() { menu.restoreStyle(); menu.remove() }
-		var okButton = this.querySelector("button.ok")
-		okButton.onclick = function() { menu.remove() }
-
-		// methods
-		this.doms = {}
-		this.getDom = menuGetDom
-		this.sync = menuSync
-		this.trigger = menuTrigger
-		this.showIf = menuShowIf
-		this.highlight = menuHighlight
-		this.syncValue = menuSyncValue
-
-		// activate actions
-		for(var query in menuActions) {
-			var action = menuActions[query]
-			var input = this.getDom(query)
-			if(!input) continue
-			// icons
-			if(input.classList.contains("icon")) {
-				var svg = input.querySelector("svg")
-				if(!svg) continue
-				svg.onclick = action
-				svg.menu = this
-			}
-			// inputs & selects
-			if(input.tagName=="INPUT" || input.tagName=="SELECT") {
-				input.addEventListener("input", action)
-				input.menu = this
-			}
-		}
-	},
-	ondetach: function() {
-		this.unlink()
-	}
-})
-
-var menuGetDom = function(query) {
-	var doms = this.doms, dom = doms[query]
-	if(dom===undefined)
-		dom = doms[query] = this.querySelector(query)
-	return dom
-}
-
-var menuLinkTo = function(target) {
+menuMethods.linkTo = function(target) {
 	if(this.target) this.unlink()
 	this.target = target
 	target.msaEditionFlexItemMenu = this
@@ -388,7 +323,7 @@ var menuLinkTo = function(target) {
 	this.backupStyle()
 }
 
-var menuUnlink = function() {
+menuMethods.unlink = function() {
 	if(!this.target) return
 	var target = this.target
 	target.removeEventListener("select", showMenu)
@@ -399,35 +334,14 @@ var menuUnlink = function() {
 	delete this.target
 }
 
-var menuBackupStyle = function() {
-	if(this.styleBackup!==undefined || !this.target) return
-	this.styleBackup = this.target.style.cssText
+var showMenu = function() {
+	var menu = this.msaEditionFlexItemMenu
+	if(menu) menu.style.display = ''
 }
-
-var menuRestoreStyle = function() {
-	if(this.styleBackup===undefined || !this.target) return
-	this.target.style.cssText = this.styleBackup
-	delete this.styleBackup
-}
-
-var menuShow = function() {
-	this.style.display = ''
-}
-
-var menuHide = function() {
-	this.style.display = 'none'
-}
-
-// listeners callbacks
 
 var hideMenu = function() {
 	var menu = this.msaEditionFlexItemMenu
 	if(menu) menu.style.display = 'none'
-}
-
-var showMenu = function() {
-	var menu = this.msaEditionFlexItemMenu
-	if(menu) menu.style.display = ''
 }
 
 var syncMenuFromMove = function() {
@@ -440,13 +354,30 @@ var syncMenuFromResize = function() {
 	if(menu) menu.sync("resize")
 }
 
-// menu sync functions
-
-var menuTrigger = function(changeType) {
-	this.target.dispatchEvent(new Event(changeType))
+menuMethods.backupStyle = function() {
+	if(this.styleBackup!==undefined || !this.target) return
+	this.styleBackup = this.target.style.cssText
 }
 
-var menuSync = function(changeType) {
+menuMethods.restoreStyle = function() {
+	if(this.styleBackup===undefined || !this.target) return
+	this.target.style.cssText = this.styleBackup
+	delete this.styleBackup
+}
+
+menuMethods.show = function() {
+	this.style.display = ''
+}
+
+menuMethods.hide = function() {
+	this.style.display = 'none'
+}
+
+menuMethods.trigger = function(evt) {
+	trigger(this.target, evt)
+}
+
+menuMethods.sync = function(changeType) {
 	var target = this.target, style = target.style
 	var computedStyle = window.getComputedStyle(target)
 
@@ -538,15 +469,15 @@ var menuSync = function(changeType) {
 	}
 }
 
-var menuShowIf = function(query, doShow) {
-	var dom = this.getDom(query)
+menuMethods.showIf = function(query, doShow) {
+	var dom = this.Q(query)
 	if(dom) dom.style.display = doShow ? "" : "none"
 }
 
-var menuHighlight = function(queryToHighlight, queryToUnhighlight) {
+menuMethods.highlight = function(queryToHighlight, queryToUnhighlight) {
 	// remove all highlights in input block (if exists)
 	if(queryToUnhighlight) {
-		var dom = this.getDom(queryToUnhighlight)
+		var dom = this.Q(queryToUnhighlight)
 		if(dom) {
 			var highlights = dom.querySelectorAll(".highlight")
 			for(var i=0, len=highlights.length; i<len; ++i)
@@ -555,18 +486,18 @@ var menuHighlight = function(queryToHighlight, queryToUnhighlight) {
 	}
 	// add highlight to input elem (if exists)
 	if(queryToHighlight) {
-		var dom = this.getDom(queryToHighlight)
+		var dom = this.Q(queryToHighlight)
 		if(dom) dom.classList.add("highlight")
 	}
 }
 
-var menuSyncValue = function(type, query, computedStyle, attr) {
-	var target = this.target, dom = this.getDom(query)
+menuMethods.syncValue = function(type, query, computedStyle, attr) {
+	var target = this.target, dom = this.Q(query)
 	var computedStyle = window.getComputedStyle(target)
 	var valueObj = this[type] = this[type] || {}
 	// determine attr (if not provided)
 	if(!attr) {
-		var attrSelect = this.getDom(query+" .attr")
+		var attrSelect = this.Q(query+" .attr")
 		attr = attrSelect.options[attrSelect.selectedIndex].text
 	}
 	valueObj.attr = attr
@@ -576,16 +507,17 @@ var menuSyncValue = function(type, query, computedStyle, attr) {
 	var val = getSizeVal(size), unit = getSizeUnit(size)
 	// sync val input
 	valueObj.val = val
-	this.getDom(query+" .val").value = val
+	this.Q(query+" .val").value = val
 	// sync unit select
 	valueObj.unit = unit
-	var unitSelect = this.getDom(query+" .unit")
+	var unitSelect = this.Q(query+" .unit")
 	unitSelect.selectedIndex = getOptionIndexFromText(unitSelect, unit)
 }
 
+
 // menu actions //////////////////////////////////////////////
 
-var menuActions = {}
+var menuActions = []
 
 // position
 var setPositionInline = function(target) {
@@ -598,46 +530,36 @@ var setPositionInline = function(target) {
 	// else force position to "static"
 	if(computedStyle.position == "absolute" ) target.style.position = "static"
 	// remove top, bottom, width, height (as they may be created by absolute positioning, and may interfer with relative position)
-	backUpdStyle(target, "left", "")
-	backUpdStyle(target, "right", "")
-	backUpdStyle(target, "top", "")
-	backUpdStyle(target, "bottom", "")
+	backup(target, { key:"msaEditionPosition", style:["left", "right", "top", "bottom"] })
+	trigger(target, "move")
 }
-menuActions[".icon.row-inline"] = menuActions[".icon.column-inline"] = function() {
-	var menu=this.menu, target=menu.target
-	setPositionInline(target)
-	menu.trigger("move")
-}
+menuActions.push({el:".icon.row-inline, .icon.column-inline", evt:"click", act:function() {
+	setPositionInline(this.target)
+}})
+
 var setPositionFloat = function(target) {
 	// update target position
 	target.style.position = "absolute"
 	// set top & left, if necessary
 	var compStyle = window.getComputedStyle(target)
-	/*var xSize = target.style.left || target.style.right || computedStyle.left
-	var ySize = target.style.top || target.style.bottom || computedStyle.top
-	if(!isSize(xSize)) target.style.left = "0px"
-	if(!isSize(ySize)) target.style.top = "0px"*/
 
-	var xSize = target.style.left || target.style.right
-	if(!xSize) restoreStyle(target, "left") || restoreStyle(target, "right")
+	restore(target, { key: "msaEditionPosition" })
+
 	xSize = target.style.left || target.style.right || compStyle.left
 	if(!isSize(xSize)) target.style.left = "0px"
 
-	var ySize = target.style.top || target.style.bottom
-	if(!ySize) restoreStyle(target, "top") || restoreStyle(target, "bottom")
 	ySize = target.style.top || target.style.bottom || compStyle.top
 	if(!isSize(ySize)) target.style.top = "0px"
+	trigger(target, "move")
 }
-menuActions[".icon.row-float"] = menuActions[".icon.column-float"] = function() {
-	var menu=this.menu, target=menu.target
-	setPositionFloat(target)
-	menu.trigger("move")
-}
+menuActions.push({el:".icon.row-float, .icon.column-float", evt:"click", act:function() {
+	setPositionFloat(this.target)
+}})
 
 // size
 var buildSetSizeFull = function(size, dir, otherDir) {
 	return function() {
-		var menu=this.menu, target=menu.target
+		var menu=this, target=menu.target
 		var direction = menu.direction
 		// update target style
 		if(direction==dir)
@@ -649,97 +571,98 @@ var buildSetSizeFull = function(size, dir, otherDir) {
 		menu.trigger("resize")
 	}
 }
-menuActions[".icon.width-full"] = buildSetSizeFull("width", "row", "column")
-menuActions[".icon.height-full"] = buildSetSizeFull("height", "column", "row")
+menuActions.push({el:".icon.width-full",  evt:"click", act:buildSetSizeFull("width", "row", "column")})
+menuActions.push({el:".icon.height-full", evt:"click", act:buildSetSizeFull("height", "column", "row")})
 
 var buildSetSizeJust = function(size, dir, otherDir) {
 	return function() {
-		var menu=this.menu, target=menu.target
+		var menu=this, target=menu.target
 		var direction = menu.direction
 		// update target style
 		if(direction==dir && (!target.style.alignSelf || target.style.alignSelf=="stretch"))
 			target.style.alignSelf = "flex-start"
 		else if(direction==otherDir)
-			target.style.flex = ""
+			target.style.flex = "0"
 		target.style[size] = ""
 		// trigger change
 		menu.trigger("resize")
 	}
 }
-menuActions[".icon.width-just"] = buildSetSizeJust("width", "row", "column")
-menuActions[".icon.height-just"] = buildSetSizeJust("height", "column", "row")
+menuActions.push({el:".icon.width-just",  evt:"click", act:buildSetSizeJust("width", "row", "column")})
+menuActions.push({el:".icon.height-just", evt:"click", act:buildSetSizeJust("height", "column", "row")})
 
+// TODO: fix buildSetSizeFixed (harmonize code in msa-edition-common-size ?)
 var buildSetSizeFixed = function(size, dir, otherDir) {
 	return function() {
-		var menu=this.menu, target=menu.target
+		var menu=this, target=menu.target
 		var computedStyle = window.getComputedStyle(target)
 		var direction = menu.direction
 		// update target style
 		if(direction==dir && (!target.style.alignSelf || target.style.alignSelf=="stretch"))
 			target.style.alignSelf = "flex-start"
 		else if(direction==otherDir)
-			target.style.flex = ""
+			target.style.flex = "0"
 		if(!target.style[size])
 			target.style[size] = computedStyle[size]
 		// trigger change
 		menu.trigger("resize")
 	}
 }
-menuActions[".icon.width-fixed"] = buildSetSizeFixed("width", "row", "column")
-menuActions[".icon.height-fixed"] = buildSetSizeFixed("height", "column", "row")
+menuActions.push({el:".icon.width-fixed",  evt:"click", act:buildSetSizeFixed("width", "row", "column")})
+menuActions.push({el:".icon.height-fixed", evt:"click", act:buildSetSizeFixed("height", "column", "row")})
 
 // align
 
-menuActions[".icon.row-start"] = menuActions[".icon.column-start"] = function() {
-	var menu=this.menu, target=menu.target
+menuActions.push({el:".icon.row-start, .icon.column-start", evt:"click", act:function() {
+	var menu=this, target=menu.target
 	target.style.alignSelf = "flex-start"
 	// trigger change
 	menu.trigger("move")
-}
+}})
 
-menuActions[".icon.row-center"] = menuActions[".icon.column-center"] = function() {
-	var menu=this.menu, target=menu.target
+menuActions.push({el:".icon.row-center, .icon.column-center", evt:"click", act:function() {
+	var menu=this, target=menu.target
 	target.style.alignSelf = "center"
 	// trigger change
 	menu.trigger("move")
-}
+}})
 
-menuActions[".icon.row-end"] = menuActions[".icon.column-end"] = function() {
-	var menu=this.menu, target=menu.target
+menuActions.push({el:".icon.row-end, .icon.column-end", evt:"click", act:function() {
+	var menu=this, target=menu.target
 	target.style.alignSelf = "flex-end"
 	// trigger change
 	menu.trigger("move")
-}
+}})
 
 // unit
 
 var buildSetSizeVal = function(type, changeType) {
-	return function() {
-		var menu = this.menu, target = menu.target
+	return function(evt, input) {
+		var menu = this, target = menu.target
 		// update target style
 		var attr = menu[type].attr,
-			val = this.value,
+			val = input.value,
 			unit = menu[type].unit
 		target.style[attr] = val + unit
 		// trigger change
 		menu.trigger(changeType)
 	}
 }
-menuActions[".position-x-value .val"] = buildSetSizeVal("position-x", "move")
-menuActions[".position-y-value .val"] = buildSetSizeVal("position-y", "move")
-menuActions[".width-value .val"] = buildSetSizeVal("width-value", "resize")
-menuActions[".height-value .val"] = buildSetSizeVal("height-value", "resize")
+menuActions.push({el:".position-x-value .val", evt:"input", act:buildSetSizeVal("position-x-value", "move")})
+menuActions.push({el:".position-y-value .val", evt:"input", act:buildSetSizeVal("position-y-value", "move")})
+menuActions.push({el:".width-value .val",      evt:"input", act:buildSetSizeVal("width-value", "resize")})
+menuActions.push({el:".height-value .val",     evt:"input", act:buildSetSizeVal("height-value", "resize")})
 
 var buildSetSizeUnit = function(type, changeType) {
-	return function() {
-		var menu = this.menu, target = menu.target
+	return function(evt, input) {
+		var menu = this, target = menu.target
 		var computedStyle = window.getComputedStyle(target)
 		var attr = menu[type].attr, computedAttr = getAssociatedComputedStyleAttr(attr)
 		// save old size value
 		var oldValue = getSizeVal(computedStyle[computedAttr])
 		// update target style
 		var val = menu[type].val,
-			unit = this.options[this.selectedIndex].text
+			unit = input.options[input.selectedIndex].text
 		target.style[attr] = val + unit
 		// recompute the size with the new unit, like if it would have not changed
 		var newValue = getSizeVal(computedStyle[computedAttr])
@@ -750,19 +673,19 @@ var buildSetSizeUnit = function(type, changeType) {
 		menu.trigger(changeType)
 	}
 }
-menuActions[".position-x-value .unit"] = buildSetSizeUnit("position-x", "move")
-menuActions[".position-y-value .unit"] = buildSetSizeUnit("position-y", "move")
-menuActions[".width-value .unit"] = buildSetSizeVal("width-value", "resize")
-menuActions[".height-value .unit"] = buildSetSizeVal("height-value", "resize")
+menuActions.push({el:".position-x-value .unit", evt:"input", act:buildSetSizeUnit("position-x-value", "move")})
+menuActions.push({el:".position-y-value .unit", evt:"input", act:buildSetSizeUnit("position-y-value", "move")})
+menuActions.push({el:".width-value .unit",      evt:"input", act:buildSetSizeUnit("width-value", "resize")})
+menuActions.push({el:".height-value .unit",     evt:"input", act:buildSetSizeUnit("height-value", "resize")})
 
 var buildSetSizeAttr = function(type, changeType) {
-	return function() {
-		var menu = this.menu, target = menu.target
+	return function(evt, input) {
+		var menu = this, target = menu.target
 		// update target style, by removing previous attr style
 		var oldAttr = menu[type].attr
 		target.style[oldAttr] = ""
 		// update target style, by setting the new attr style
-		var attr = this.options[this.selectedIndex].text,
+		var attr = input.options[input.selectedIndex].text,
 			val = menu[type].val,
 			unit = menu[type].unit
 		target.style[attr] = val + unit
@@ -770,16 +693,50 @@ var buildSetSizeAttr = function(type, changeType) {
 		menu.trigger(changeType)
 	}
 }
-menuActions[".position-x-value .attr"] = buildSetSizeAttr("position-x", "move")
-menuActions[".position-y-value .attr"] = buildSetSizeAttr("position-y", "move")
-//	menuActions[".width-value .attr"] = buildSetSizeVal("width-value", "resize")
-//	menuActions[".height-value .attr"] = buildSetSizeVal("height-value", "resize")
+menuActions.push({el:".position-x-value .attr", evt:"input", act:buildSetSizeAttr("position-x-value", "move")})
+menuActions.push({el:".position-y-value .attr", evt:"input", act:buildSetSizeAttr("position-y-value", "move")})
 
-// style attrs
-var getAssociatedComputedStyleAttr = function(attr) {
-	if(attr==="minHeight") attr = "height"
-	return attr
+
+
+// register element
+
+Msa.registerElement("msa-edition-flex-item-menu", {
+	template:"#msa-edition-flex-item-menu",
+	oncreate: function(){
+
+		this.Q = Msa.Q
+		Object.assign(this, menuMethods)
+		Msa.addActions(this, menuActions)
+	},
+	ondetach: function() {
+		this.unlink()
+	}
+})
+
+// popup ///////////////////////////////////
+
+var popupFlexItemMenuFor = function(target) {
+	if(typeof target==="string")
+		target = document.querySelector(target)
+	var menu = target.msaEditionFlexItemMenu
+	if(!menu) {
+		menu = MsaPopup.create("msa-edition-flex-item-menu", {
+			onCancel: popupOnCancel,
+			buttons: popupButtons
+		})
+		menu.linkTo(target)
+	}
+	return menu
 }
+
+var popupOnCancel = function() {
+	this.restoreStyle()
+}
+
+var popupButtons = [
+	{ text:"OK" },
+	{ text:"Cancel", act:"cancel" }
+]
 
 // various /////////////////////////////////
 
@@ -801,18 +758,17 @@ var getOptionIndexFromText = function(selectDom, optionText) {
 	return res
 }
 
+// style attrs
+var getAssociatedComputedStyleAttr = function(attr) {
+	if(attr==="minHeight") attr = "height"
+	return attr
+}
+
 // publish
 
 if(!document.MsaEdition) document.MsaEdition = MsaEdition = {}
 
-MsaEdition.openFlexItemMenuFor = function(target) {
-	var menu = target.msaEditionFlexItemMenu
-	if(!menu) {
-		menu = MsaPopup.create("msa-edition-flex-item-menu")
-		menu.linkTo(target)
-	}
-	return menu
-}
+MsaEdition.popupFlexItemMenuFor = popupFlexItemMenuFor
 
 MsaEdition.setPositionInline = setPositionInline
 MsaEdition.setPositionFloat = setPositionFloat

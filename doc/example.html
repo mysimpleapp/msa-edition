@@ -1,0 +1,34 @@
+<html>
+	<head>
+		<link rel="import" href="../msa-edition-mover.html"></link>
+		<link rel="import" href="../msa-edition-resizer.html"></link>
+		<link rel="import" href="../msa-edition-flex-item-menu.html"></link>
+		<style>
+			body {
+				padding: 50px;
+			}
+			#my-div {
+				border: 1px dashed grey;
+				width: 150px;
+				line-height: 50px;
+				font-size: 16px;
+				font-weight: bold;
+				text-align: center;
+			}
+		</style>
+	</head>
+	<body>
+		<script>
+			var div = document.createElement("div")
+			div.id = "my-div"
+			div.textContent = "my-elem"
+			document.body.appendChild(div)
+			var div2 = div.cloneNode(true)
+			document.body.appendChild(div2)
+			div.style.position = "absolute"
+			MsaEdition.makeMovable(div)
+			MsaEdition.makeResizable(div2)
+			MsaEdition.popupFlexItemMenuFor(div)
+		</script>
+	</body>
+</html>
